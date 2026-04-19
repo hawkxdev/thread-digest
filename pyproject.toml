@@ -12,7 +12,7 @@ dependencies = [
     'pydantic-settings>=2.6.0',
     'python-dotenv>=1.0.1',
     'loguru>=0.7.2',
-    'openai>=1.54.1',
+    'openai>=1.54.1,<3',
     'httpx>=0.27.0',
     'aiolimiter>=1.1.0',
     'typing-extensions>=4.12.2',
@@ -76,7 +76,7 @@ ignore_missing_imports = true
 
 # ===== RUFF =====
 [tool.ruff]
-line-length = 88
+line-length = 79
 target-version = 'py312'
 
 exclude = [
@@ -90,8 +90,10 @@ exclude = [
 
 [tool.ruff.lint]
 select = [
-    'E',    # pycodestyle errors
-    'W',    # pycodestyle warnings
+    'E4',   # pycodestyle: import errors
+    'E7',   # pycodestyle: statement errors
+    'E9',   # pycodestyle: runtime errors
+    'W6',   # pycodestyle: deprecated warnings
     'F',    # pyflakes
     'I',    # isort
     'C90',  # mccabe complexity
@@ -108,11 +110,14 @@ select = [
 
 ignore = [
     'E501',    # line too long (handled by formatter)
-    'S101',    # assert statements (ok in tests)
     'PLR2004', # magic-value-comparison
     'S311',    # pseudorandom generators (ok for backoff jitter)
     'PLW0603', # global statement (ok for singleton pattern)
 ]
+
+[tool.ruff.lint.per-file-ignores]
+'tests/**' = ['S101']
+'conftest.py' = ['S101']
 
 [tool.ruff.lint.mccabe]
 max-complexity = 15
@@ -124,6 +129,7 @@ max-args = 10
 quote-style = 'single'
 indent-style = 'space'
 skip-magic-trailing-comma = false
+docstring-code-format = true
 
 # ===== BANDIT =====
 [tool.bandit]
@@ -146,6 +152,7 @@ skips = [
 # ===== PYTEST =====
 [tool.pytest.ini_options]
 asyncio_mode = 'auto'
+asyncio_default_fixture_loop_scope = 'function'
 testpaths = ['tests']
 python_files = ['test_*.py', '*_test.py']
 python_classes = ['Test*']

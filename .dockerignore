@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+
+# Environment (will be mounted separately)
+.env
+.env.local
+.env.*
+
+# IDE
+.vscode/
+.idea/
+.cursor/
+*.swp
+
+# OS
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Tests and coverage
+tests/
+htmlcov/
+.coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README.md
+
+# Analysis and temp
+analysis/
+MagicMock/
+tmp/
+temp/
+
+# Data (will be mounted as volume)
+data/
+*.db
+*.sqlite
+*.sqlite3
+*.session
+*.log
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore

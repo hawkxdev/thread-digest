@@ -62,9 +62,6 @@ class AdminAccessMiddleware(BaseMiddleware):
                 f'event_type={event_type}'
             )
 
-            if isinstance(event, CallbackQuery):
-                await event.answer('❌ Доступ запрещён', show_alert=True)
-
             return None
 
         log_telegram_event(

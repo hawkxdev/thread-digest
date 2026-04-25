@@ -23,7 +23,7 @@ class TestConfigLoading:
     ) -> None:
         monkeypatch.delenv('BOT_TOKEN', raising=False)
         with pytest.raises(ValidationError):
-            Config()  # type: ignore[call-arg]
+            Config(_env_file=None)  # type: ignore[call-arg]
 
 
 class TestValidators:
@@ -119,7 +119,11 @@ class TestSingleton:
         self,
         reset_config_singleton: None,
         monkeypatch: pytest.MonkeyPatch,
+        tmp_path,  # type: ignore[no-untyped-def]
     ) -> None:
+        # Switch cwd to a clean dir so pydantic-settings doesn't pick up
+        # the project's real .env file (T1 in brain troubleshooting).
+        monkeypatch.chdir(tmp_path)
         for key in ('BOT_TOKEN', 'ADMIN_USER_ID', 'DEEPSEEK_API_KEY'):
             monkeypatch.delenv(key, raising=False)
         with pytest.raises(RuntimeError):

@@ -5,6 +5,7 @@ import asyncio
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import BotCommand, BotCommandScopeChat
 
 from ..config import get_config
@@ -39,7 +40,15 @@ async def create_dispatcher() -> Dispatcher:
 
 
 async def setup_bot_commands(bot: Bot) -> None:
-    """Register admin-only command list."""
+    """Register admin-only command list.
+
+    Default scope is reset to empty list first (always succeeds, hides
+    commands from non-admins). Per-chat admin scope is best-effort:
+    Telegram rejects it with "chat not found" until admin sends the
+    first message to the bot — installs on next restart. See brain
+    `troubleshooting.md` Issue B4.
+    """
+    logger = get_logger(__name__)
     config = get_config()
 
     await bot.set_my_commands([])
@@ -50,9 +59,16 @@ async def setup_bot_commands(bot: Bot) -> None:
         BotCommand(command='history', description='История запросов'),
     ]
 
-    await bot.set_my_commands(
-        owner_commands, scope=BotCommandScopeChat(chat_id=config.ADMIN_USER_ID)
-    )
+    try:
+        await bot.set_my_commands(
+            owner_commands,
+            scope=BotCommandScopeChat(chat_id=config.ADMIN_USER_ID),
+        )
+    except TelegramBadRequest as exc:
+        logger.warning(
+            f'Per-chat command scope skipped: {exc}. '
+            f'Send /start to bot once, then restart to install commands.'
+        )
 
 
 async def on_startup(bot: Bot) -> None:

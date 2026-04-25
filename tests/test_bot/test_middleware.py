@@ -81,12 +81,12 @@ async def test_non_admin_message_silently_blocked(
 
 
 @pytest.mark.asyncio
-async def test_non_admin_callback_blocked_with_alert(
+async def test_non_admin_callback_silently_blocked(
     middleware: AdminAccessMiddleware,
     patch_config: None,
     config: Config,
 ) -> None:
-    """Non-admin callback gets alert and is blocked."""
+    """Non-admin callback returns None with no answer (no spinner reply)."""
     handler = AsyncMock(return_value='handled')
     event = _callback_event(user_id=config.ADMIN_USER_ID + 1)
 
@@ -94,10 +94,7 @@ async def test_non_admin_callback_blocked_with_alert(
 
     assert result is None
     handler.assert_not_awaited()
-    event.answer.assert_awaited_once()
-    args, kwargs = event.answer.call_args
-    assert kwargs.get('show_alert') is True
-    assert '❌' in args[0]
+    event.answer.assert_not_awaited()
 
 
 @pytest.mark.asyncio

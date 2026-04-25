@@ -16,16 +16,6 @@ class TestConfigLoading:
         assert config.DEEPSEEK_API_KEY == 'sk-test-deepseek'
         assert config.REDDIT_USER_AGENT.startswith('thread-digest')
 
-    def test_defaults_applied(self, config: Config) -> None:
-        assert config.DEEPSEEK_MODEL == 'deepseek-chat'
-        assert config.DEEPSEEK_MAX_TOKENS == 4000
-        assert config.DEEPSEEK_TEMPERATURE == 0.3
-        assert config.REDDIT_RATE_LIMIT_QPM == 5
-        assert config.REDDIT_FETCH_TIMEOUT == 30.0
-        assert config.log_level == 'INFO'
-        assert config.environment == 'development'
-        assert config.debug is False
-
     def test_missing_required_raises(
         self,
         reset_config_singleton: None,

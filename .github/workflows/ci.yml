@@ -8,6 +8,7 @@ on:
 env:
   UV_VERSION: '0.5.15'
   PYTHON_VERSION: '3.12'
+  DEPLOY_PATH: '/opt/thread-digest'
 
 permissions:
   contents: read
@@ -40,3 +41,65 @@ jobs:
 
       - name: Pytest
         run: uv run pytest -v
+
+  deploy:
+    name: Deploy to VPS
+    needs: quality
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
+        run: |
+          echo "$SSH_DEPLOY_KEY" > "$RUNNER_TEMP/key"
+          chmod 600 "$RUNNER_TEMP/key"
+
+      - name: Rsync to VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          rsync -avz --delete \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.venv' \
+            --exclude='.env' \
+            --exclude='*.db' \
+            --exclude='data/' \
+            --exclude='logs/' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='.pytest_cache' \
+            --exclude='.mypy_cache' \
+            --exclude='.ruff_cache' \
+            --exclude='htmlcov' \
+            --exclude='.coverage' \
+            --exclude='key' \
+            --exclude='*.pem' \
+            -e "ssh -i $RUNNER_TEMP/key -o StrictHostKeyChecking=no" \
+            ./ "$VPS_USER@$VPS_HOST:$DEPLOY_PATH/"
+
+      - name: Build and restart container
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          ssh -i "$RUNNER_TEMP/key" -o StrictHostKeyChecking=no "$VPS_USER@$VPS_HOST" \
+            "mkdir -p $DEPLOY_PATH/data $DEPLOY_PATH/logs && \
+             chown -R 1000:1000 $DEPLOY_PATH/data $DEPLOY_PATH/logs && \
+             cd $DEPLOY_PATH && docker compose up -d --build"
+
+      - name: Health check
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          sleep 35
+          STATUS=$(ssh -i "$RUNNER_TEMP/key" -o StrictHostKeyChecking=no "$VPS_USER@$VPS_HOST" \
+            "docker inspect -f '{{.State.Health.Status}}' thread-digest-bot")
+          echo "Health status: $STATUS"
+          test "$STATUS" = "healthy"

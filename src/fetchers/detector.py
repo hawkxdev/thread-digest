@@ -3,8 +3,10 @@
 import re
 from re import Pattern
 
+from ..config import get_config
 from .base import BasePlatformFetcher
 from .reddit import RedditFetcher
+from .x import XFetcher
 
 REDDIT_PATTERNS: tuple[Pattern[str], ...] = (
     re.compile(
@@ -21,12 +23,24 @@ REDDIT_PATTERNS: tuple[Pattern[str], ...] = (
     ),
 )
 
-# TODO: add X/Twitter patterns when XFetcher implemented
-# TODO: add Threads patterns when ThreadsFetcher implemented
+X_PATTERNS: tuple[Pattern[str], ...] = (
+    re.compile(
+        r'^https?://(?:www\.)?x\.com/[^/]+/status/\d+',
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r'^https?://(?:www\.|mobile\.)?twitter\.com/[^/]+/status/\d+',
+        re.IGNORECASE,
+    ),
+)
 
 
 def detect_fetcher(url: str) -> type[BasePlatformFetcher] | None:
-    """Map URL to fetcher class, None if unsupported."""
+    """Map URL to fetcher."""
     if any(pattern.match(url) for pattern in REDDIT_PATTERNS):
         return RedditFetcher
+    if any(pattern.match(url) for pattern in X_PATTERNS):
+        if get_config().X_API_KEY is None:
+            return None
+        return XFetcher
     return None

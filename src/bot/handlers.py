@@ -16,6 +16,7 @@ from ..database.manager import get_database_manager
 from ..fetchers.base import BasePlatformFetcher
 from ..fetchers.detector import detect_fetcher
 from ..fetchers.reddit import RedditFetcher, RedditFetchError
+from ..fetchers.x import XFetcher, XFetchError
 from .formatter import format_summary
 
 URL_RE = re.compile(r'https?://\S+', re.IGNORECASE)
@@ -96,13 +97,22 @@ def _build_fetcher(
     fetcher_class: type[BasePlatformFetcher],
 ) -> BasePlatformFetcher:
     """Instantiate fetcher with config."""
+    config = get_config()
     if fetcher_class is RedditFetcher:
-        config = get_config()
         return RedditFetcher(
             user_agent=config.REDDIT_USER_AGENT,
             rate_limit_qpm=config.REDDIT_RATE_LIMIT_QPM,
             timeout=config.REDDIT_FETCH_TIMEOUT,
             proxy=config.REDDIT_PROXY,
+        )
+    if fetcher_class is XFetcher:
+        if config.X_API_KEY is None:
+            raise RuntimeError('X_API_KEY not configured')
+        return XFetcher(
+            api_key=config.X_API_KEY,
+            base_url=config.X_API_BASE_URL,
+            timeout=config.X_FETCH_TIMEOUT,
+            max_pages=config.X_MAX_PAGES,
         )
     raise RuntimeError(f'No factory for fetcher: {fetcher_class}')
 
@@ -140,7 +150,7 @@ async def on_url(message: Message) -> None:
 
         try:
             thread = await fetcher.fetch_thread(url)
-        except RedditFetchError as exc:
+        except (RedditFetchError, XFetchError) as exc:
             text_lower = str(exc).lower()
             error_text = str(exc)
             if 'rate' in text_lower or '429' in error_text:

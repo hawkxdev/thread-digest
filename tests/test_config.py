@@ -84,6 +84,20 @@ class TestValidators:
             Config()  # type: ignore[call-arg]
 
 
+class TestXFields:
+    """X (Twitter) optional fields env binding."""
+
+    def test_x_api_key_loaded_from_env(
+        self,
+        env_vars: dict[str, str],
+        reset_config_singleton: None,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv('X_API_KEY', 'new1_test_key_123')
+        cfg = Config()  # type: ignore[call-arg]
+        assert cfg.X_API_KEY == 'new1_test_key_123'
+
+
 class TestProperties:
     """Computed properties."""
 

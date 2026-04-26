@@ -58,6 +58,24 @@ class Config(BaseSettings):
         description='Optional proxy URL (http://user:pass@host:port)',
     )
 
+    # === X (Twitter) via twitterapi.io ===
+    X_API_KEY: str | None = Field(
+        default=None,
+        description='twitterapi.io API key; None disables X support',
+    )
+    X_API_BASE_URL: str = Field(
+        default='https://api.twitterapi.io',
+        description='twitterapi.io REST base URL',
+    )
+    X_FETCH_TIMEOUT: float = Field(
+        default=60.0,
+        description='httpx per-request timeout in seconds',
+    )
+    X_MAX_PAGES: int = Field(
+        default=5,
+        description='thread_context pagination safety cap',
+    )
+
     # === Database ===
     DATABASE_URL: str = Field(
         default='sqlite+aiosqlite:///./data/thread_digest.db',

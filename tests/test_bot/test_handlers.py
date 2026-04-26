@@ -11,6 +11,7 @@ from src.bot import handlers
 from src.config import Config
 from src.fetchers.base import BasePlatformFetcher, Comment, Thread
 from src.fetchers.reddit import RedditFetcher, RedditFetchError
+from src.fetchers.x import XFetcher, XFetchError
 
 
 def _thread() -> Thread:
@@ -344,6 +345,70 @@ async def test_build_fetcher_returns_reddit_for_reddit_class(
         assert isinstance(fetcher, RedditFetcher)
     finally:
         await fetcher.close()
+
+
+@pytest.mark.asyncio
+async def test_build_fetcher_returns_x_for_x_class(
+    env_vars: dict[str, str],
+    reset_config_singleton: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Factory returns XFetcher when X_API_KEY is set."""
+    monkeypatch.setenv('X_API_KEY', 'new1_test_key')
+    cfg = Config()  # type: ignore[call-arg]
+    monkeypatch.setattr(handlers, 'get_config', lambda: cfg)
+    fetcher = handlers._build_fetcher(XFetcher)
+    try:
+        assert isinstance(fetcher, XFetcher)
+    finally:
+        await fetcher.close()
+
+
+@pytest.mark.asyncio
+async def test_build_fetcher_x_raises_when_key_missing(
+    env_vars: dict[str, str],
+    reset_config_singleton: None,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,  # type: ignore[no-untyped-def]
+) -> None:
+    """Factory raises RuntimeError when X_API_KEY is None."""
+    # Isolate from local .env (T2 pattern)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv('X_API_KEY', raising=False)
+    cfg = Config()  # type: ignore[call-arg]
+    assert cfg.X_API_KEY is None
+    monkeypatch.setattr(handlers, 'get_config', lambda: cfg)
+    with pytest.raises(RuntimeError, match='X_API_KEY not configured'):
+        handlers._build_fetcher(XFetcher)
+
+
+@pytest.mark.asyncio
+async def test_url_x_fetch_error_maps_to_user_message(
+    mock_db: AsyncMock,
+    patch_config: Config,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """XFetchError → STATUS_FETCH_ERROR + NOT_FOUND_MESSAGE."""
+    fetcher = AsyncMock()
+    fetcher.fetch_thread.side_effect = XFetchError('tweet not found')
+    fetcher.close = AsyncMock()
+    monkeypatch.setattr(handlers, '_build_fetcher', lambda cls: fetcher)
+    monkeypatch.setattr(handlers, 'detect_fetcher', lambda url: XFetcher)
+    client = AsyncMock()
+    client.close = AsyncMock()
+    monkeypatch.setattr(handlers, 'DeepSeekClient', lambda c: client)
+
+    progress = AsyncMock()
+    progress.edit_text = AsyncMock()
+    msg = _message('https://x.com/user/status/123')
+    msg.answer = AsyncMock(return_value=progress)
+
+    await handlers.on_url(msg)
+
+    saved = mock_db.save_digest_result.await_args.kwargs
+    assert saved['status'] == handlers.STATUS_FETCH_ERROR
+    assert 'tweet not found' in saved['error']
+    progress.edit_text.assert_awaited_with(handlers.NOT_FOUND_MESSAGE)
 
 
 def test_build_fetcher_raises_for_unknown_class() -> None:

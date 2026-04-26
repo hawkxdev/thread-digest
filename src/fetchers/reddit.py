@@ -1,5 +1,6 @@
 """Reddit fetcher via public .json endpoint."""
 
+import asyncio
 import re
 from datetime import UTC, datetime
 from typing import Any
@@ -13,6 +14,8 @@ from .base import BasePlatformFetcher, Comment, Thread
 REDDIT_BASE = 'https://www.reddit.com'
 DELETED_BODIES = ('[deleted]', '[removed]')
 COMMENT_QUERY = '.json?limit=500&depth=10&sort=confidence'
+RETRY_STATUSES = (403, 429, 503)
+RETRY_BACKOFF_SECONDS = (0.5, 1.0)
 
 CANONICAL_RE = re.compile(
     r'reddit\.com/r/(?P<sub>[^/]+)/comments/(?P<post>[a-z0-9]+)',
@@ -34,13 +37,17 @@ class RedditFetcher(BasePlatformFetcher):
         user_agent: str,
         rate_limit_qpm: int = 5,
         timeout: float = 30.0,
+        proxy: str | None = None,
     ) -> None:
         """Init httpx client + per-minute rate limiter."""
-        self._client = httpx.AsyncClient(
-            headers={'User-Agent': user_agent},
-            follow_redirects=True,
-            timeout=timeout,
-        )
+        client_kwargs: dict[str, Any] = {
+            'headers': {'User-Agent': user_agent},
+            'follow_redirects': True,
+            'timeout': timeout,
+        }
+        if proxy:
+            client_kwargs['proxy'] = proxy
+        self._client = httpx.AsyncClient(**client_kwargs)
         self._limiter = AsyncLimiter(rate_limit_qpm, 60)
 
     async def fetch_thread(self, url: str) -> Thread:
@@ -65,8 +72,7 @@ class RedditFetcher(BasePlatformFetcher):
         """Follow redirects to get canonical URL (handles /s/ short-links)."""
         if '/s/' not in url:
             return url
-        async with self._limiter:
-            response = await self._client.get(url)
+        response = await self._get_with_retry(url)
         if response.status_code >= 400:
             logger.warning(
                 'Short-link resolution failed: {} for {}',
@@ -80,14 +86,37 @@ class RedditFetcher(BasePlatformFetcher):
 
     async def _get_json(self, url: str) -> Any:
         """GET with rate limiting and HTTP error mapping."""
-        async with self._limiter:
-            response = await self._client.get(url)
+        response = await self._get_with_retry(url)
         if response.status_code != 200:
             logger.warning(
                 'Reddit returned {} for {}', response.status_code, url
             )
             raise RedditFetchError(f'Reddit returned {response.status_code}')
         return response.json()
+
+    async def _get_with_retry(self, url: str) -> httpx.Response:
+        """GET with retry on transient statuses (residential IP rotation)."""
+        attempts = len(RETRY_BACKOFF_SECONDS) + 1
+        response: httpx.Response | None = None
+        for attempt in range(attempts):
+            async with self._limiter:
+                response = await self._client.get(url)
+            if response.status_code not in RETRY_STATUSES:
+                return response
+            if attempt < attempts - 1:
+                backoff = RETRY_BACKOFF_SECONDS[attempt]
+                logger.info(
+                    'Retry {}/{} after {}s: status {} for {}',
+                    attempt + 1,
+                    attempts - 1,
+                    backoff,
+                    response.status_code,
+                    url,
+                )
+                await asyncio.sleep(backoff)
+        if response is None:
+            raise RedditFetchError(f'No response after retries for {url}')
+        return response
 
     def _build_thread(self, payload: Any, source_url: str) -> Thread:
         """Build Thread model from Reddit JSON payload."""

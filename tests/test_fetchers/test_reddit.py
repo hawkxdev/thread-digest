@@ -10,11 +10,12 @@ import httpx
 import pytest
 from aiolimiter import AsyncLimiter
 
+from src.fetchers import reddit as reddit_module
 from src.fetchers.base import Comment
 from src.fetchers.reddit import RedditFetcher, RedditFetchError
 
 FIXTURE_DIR = Path(__file__).parent.parent / 'fixtures'
-USER_AGENT = 'thread-digest:test (by /u/hawkxdev)'
+USER_AGENT = 'thread-digest:test'
 
 
 def _load(name: str) -> bytes:
@@ -253,6 +254,154 @@ class TestErrorHandling:
                 await fetcher.fetch_thread('https://example.com/nothing')
         finally:
             await fetcher.close()
+
+
+class TestRetry:
+    """Retry on 403/429/503 — covers residential proxy IP rotation."""
+
+    async def test_403_retried_then_succeeds(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """First 403 retried, second attempt returns 200."""
+
+        monkeypatch.setattr(reddit_module, 'RETRY_BACKOFF_SECONDS', (0, 0))
+
+        success_payload = json.dumps(
+            [
+                {
+                    'data': {
+                        'children': [
+                            {
+                                'kind': 't3',
+                                'data': {
+                                    'id': 'abc',
+                                    'title': 't',
+                                    'selftext': '',
+                                    'num_comments': 0,
+                                },
+                            }
+                        ]
+                    }
+                },
+                {'data': {'children': []}},
+            ]
+        ).encode()
+
+        responses = iter(
+            [
+                httpx.Response(403, text='blocked'),
+                httpx.Response(200, content=success_payload),
+            ]
+        )
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return next(responses)
+
+        fetcher = _make_fetcher(httpx.MockTransport(handler))
+        try:
+            thread = await fetcher.fetch_thread(
+                'https://www.reddit.com/r/x/comments/abc/'
+            )
+        finally:
+            await fetcher.close()
+
+        assert thread.id == 'abc'
+
+    async def test_429_retried(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """429 also triggers retry."""
+
+        monkeypatch.setattr(reddit_module, 'RETRY_BACKOFF_SECONDS', (0, 0))
+
+        success_payload = json.dumps(
+            [
+                {
+                    'data': {
+                        'children': [
+                            {
+                                'kind': 't3',
+                                'data': {
+                                    'id': 'abc',
+                                    'title': 't',
+                                    'selftext': '',
+                                    'num_comments': 0,
+                                },
+                            }
+                        ]
+                    }
+                },
+                {'data': {'children': []}},
+            ]
+        ).encode()
+
+        responses = iter(
+            [
+                httpx.Response(429, text='rate limit'),
+                httpx.Response(200, content=success_payload),
+            ]
+        )
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return next(responses)
+
+        fetcher = _make_fetcher(httpx.MockTransport(handler))
+        try:
+            thread = await fetcher.fetch_thread(
+                'https://www.reddit.com/r/x/comments/abc/'
+            )
+        finally:
+            await fetcher.close()
+
+        assert thread.id == 'abc'
+
+    async def test_404_not_retried(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """404 is final — no retry, raises immediately."""
+
+        monkeypatch.setattr(reddit_module, 'RETRY_BACKOFF_SECONDS', (0, 0))
+
+        call_count = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            return httpx.Response(404, text='not found')
+
+        fetcher = _make_fetcher(httpx.MockTransport(handler))
+        try:
+            with pytest.raises(RedditFetchError, match='404'):
+                await fetcher.fetch_thread(
+                    'https://www.reddit.com/r/x/comments/abc/'
+                )
+        finally:
+            await fetcher.close()
+
+        assert call_count == 1
+
+    async def test_retry_exhaustion_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """All retry attempts return 403 → final RedditFetchError."""
+
+        monkeypatch.setattr(reddit_module, 'RETRY_BACKOFF_SECONDS', (0, 0))
+
+        call_count = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            return httpx.Response(403, text='blocked')
+
+        fetcher = _make_fetcher(httpx.MockTransport(handler))
+        try:
+            with pytest.raises(RedditFetchError, match='403'):
+                await fetcher.fetch_thread(
+                    'https://www.reddit.com/r/x/comments/abc/'
+                )
+        finally:
+            await fetcher.close()
+
+        assert call_count == 1 + len(reddit_module.RETRY_BACKOFF_SECONDS)
 
 
 class TestRateLimiter:

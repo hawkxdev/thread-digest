@@ -16,7 +16,7 @@ def env_vars(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
         'ADMIN_USER_ID': '111111',
         'ADMIN_CHAT_ID': '111111',
         'DEEPSEEK_API_KEY': 'sk-test-deepseek',
-        'REDDIT_USER_AGENT': 'thread-digest:test (by /u/hawkxdev)',
+        'REDDIT_USER_AGENT': 'thread-digest:test',
     }
     for key, value in defaults.items():
         monkeypatch.setenv(key, value)

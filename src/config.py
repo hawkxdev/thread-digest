@@ -53,6 +53,10 @@ class Config(BaseSettings):
     REDDIT_COMMENT_DEPTH: int = Field(
         default=10, description='Max comment tree depth'
     )
+    REDDIT_PROXY: str | None = Field(
+        default=None,
+        description='Optional proxy URL (http://user:pass@host:port)',
+    )
 
     # === Database ===
     DATABASE_URL: str = Field(

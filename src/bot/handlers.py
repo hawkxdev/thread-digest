@@ -102,6 +102,7 @@ def _build_fetcher(
             user_agent=config.REDDIT_USER_AGENT,
             rate_limit_qpm=config.REDDIT_RATE_LIMIT_QPM,
             timeout=config.REDDIT_FETCH_TIMEOUT,
+            proxy=config.REDDIT_PROXY,
         )
     raise RuntimeError(f'No factory for fetcher: {fetcher_class}')
 

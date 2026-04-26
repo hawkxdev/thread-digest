@@ -411,7 +411,9 @@ async def test_url_x_fetch_error_maps_to_user_message(
     progress.edit_text.assert_awaited_with(handlers.NOT_FOUND_MESSAGE)
 
 
-def test_build_fetcher_raises_for_unknown_class() -> None:
+def test_build_fetcher_raises_for_unknown_class(
+    patch_config: Config,  # noqa: ARG001
+) -> None:
     """Factory raises RuntimeError for unsupported fetcher classes."""
 
     class _OtherFetcher(BasePlatformFetcher):

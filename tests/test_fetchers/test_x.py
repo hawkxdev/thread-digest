@@ -148,9 +148,9 @@ class TestPagination:
                 json={
                     'tweets': page2_tweets,
                     'has_next_page': False,
-                    'next_cursor': '',
+                    'next_cursor': None,
                     'status': 'success',
-                    'msg': '',
+                    'msg': None,
                 },
             )
 

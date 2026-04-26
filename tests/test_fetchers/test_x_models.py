@@ -37,8 +37,23 @@ class TestXThreadResponse:
         resp = XThreadResponse.model_validate({'tweets': []})
         assert resp.tweets == []
         assert resp.has_next_page is False
-        assert resp.next_cursor == ''
+        assert resp.next_cursor is None
         assert resp.status == 'success'
+
+    def test_validates_last_page_response_with_null_cursor(self) -> None:
+        """Real API returns next_cursor=null on last page."""
+        resp = XThreadResponse.model_validate(
+            {
+                'tweets': [],
+                'has_next_page': False,
+                'next_cursor': None,
+                'status': 'success',
+                'msg': None,
+            }
+        )
+        assert resp.next_cursor is None
+        assert resp.msg is None
+        assert resp.has_next_page is False
 
     def test_extra_fields_ignored(self) -> None:
         resp = XThreadResponse.model_validate(

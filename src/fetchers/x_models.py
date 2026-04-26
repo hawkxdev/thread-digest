@@ -50,6 +50,6 @@ class XThreadResponse(BaseModel):
 
     tweets: list[XTweet]
     has_next_page: bool = False
-    next_cursor: str = ''
+    next_cursor: str | None = None
     status: Literal['success', 'error'] = 'success'
-    msg: str = ''
+    msg: str | None = None
